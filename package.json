@@ -1,0 +1,21 @@
+{
+  "name": "appli-chinois",
+  "version": "1.0.0",
+  "description": "Imparare il cinese: scrittura, pronuncia, flashcard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --env-file=.env server.js",
+    "migrate": "node --env-file=.env scripts/migrate-sqlite-to-postgres.js"
+  },
+  "engines": {
+    "node": "22.x"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "pg": "^8.13.1"
+  },
+  "license": "ISC"
+}
