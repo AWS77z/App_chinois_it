@@ -33,27 +33,46 @@ let currentIndex = 0;
     });
   }
 
-  // 2. GESTION DU MINI-ANIMATEUR EN HAUT
-  function playMini() {
-    if (!miniWriter) return;
+// 2. GESTION DU MINI-ANIMATEUR EN HAUT
+  let miniAnimId = 0; // Compteur de sécurité pour bloquer les "animations fantômes"
+
+  function playMini(id) {
+    // Si l'ID ne correspond plus au caractère actuel, on annule tout silencieusement
+    if (!miniWriter || id !== miniAnimId) return;
+    
+    miniWriter.hideCharacter();
+    
     miniWriter.animateCharacter({
       onComplete: () => {
-        miniTimer = setTimeout(playMini, 1200);
+        // On vérifie une dernière fois avant de relancer la boucle
+        if (id === miniAnimId) {
+          miniTimer = setTimeout(() => playMini(id), 1500);
+        }
       }
     });
   }
 
   function initMiniWriter(hanzi) {
-    clearTimeout(miniTimer);
+    miniAnimId++; // On crée un nouveau ticket pour ce caractère
+    const currentId = miniAnimId;
+
+    if (miniTimer) {
+      clearTimeout(miniTimer);
+      miniTimer = null;
+    }
+    
     const box = document.getElementById("w-mini-animator");
-    box.innerHTML = "";
+    box.innerHTML = ""; // Nettoie le conteneur
+    
     miniWriter = HanziWriter.create(box, hanzi, {
       width: box.clientWidth, height: box.clientHeight, padding: 8,
       showCharacter: false, showOutline: true,
       strokeColor: "#FF4B8C", outlineColor: "#FFE0EB",
       strokeAnimationSpeed: 1.5, delayBetweenStrokes: 150
     });
-    playMini();
+    
+    // On passe le ticket actuel à l'animation
+    miniTimer = setTimeout(() => playMini(currentId), 500);
   }
 
   // 3. AFFICHAGE DU MOT COMPLET SOUS LA GRILLE
