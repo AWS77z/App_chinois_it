@@ -20,14 +20,25 @@
   </header>
 
   <main>
+   <!-- SCRITTURA (Écriture) -->
     <section id="writing" class="panel is-active" role="tabpanel">
       <div class="writing-layout">
+        
         <div class="board-wrap">
-          <div id="writer" class="board" aria-label="Area di tracciatura"></div>
-          <p id="writing-msg" class="msg">Scegli un carattere e tracciane i tratti con il mouse o con il dito.</p>
-        </div>
-        <div class="side">
+          <!-- Sélecteur de mode -->
+          <div class="btn-row center" style="margin-bottom: 20px;">
+            <button id="w-mode-scroll" class="btn primary">Scorrimento (Liste)</button>
+            <button id="w-mode-train" class="btn">Allenamento (Boucle)</button>
+          </div>
           
+          <!-- Mini animateur qui tourne en boucle -->
+          <div id="w-mini-animator" style="width: 80px; height: 80px; margin: 0 auto 15px auto; background: var(--card-bg); border: 2px solid var(--border-soft); border-radius: 16px; position: relative;"></div>
+          
+          <div id="writer" class="board" aria-label="Area di tracciatura"></div>
+          <p id="writing-msg" class="msg">Scegli un carattere e traccia i tratti.</p>
+        </div>
+        
+        <div class="side">
           <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
             <p class="big-info" style="margin: 0;"><span id="w-pinyin" class="pinyin"></span> <span id="w-meaning"></span></p>
             <button id="w-listen" class="btn primary" style="border-radius: 50%; width: 46px; height: 46px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; margin: 0; box-shadow: 0 4px 0 var(--primary-dark);" title="Ascolta la pronuncia">🔊</button>
@@ -42,14 +53,13 @@
           <h2 class="small-title">Navigazione</h2>
           <div class="search-wrap" style="display: flex; gap: 8px; margin-bottom: 15px;">
             <button id="w-btn-list" class="btn" style="flex: 1; padding: 12px 10px;">☰ Griglia</button>
-            <!-- L'input n'a plus de maxlength="1" pour permettre de taper un mot entier -->
             <input type="text" id="w-search" placeholder="Parola in italiano o Hanzi..." style="flex: 2; padding: 12px; border-radius: 16px; border: 2px solid var(--border-soft); font-family: var(--sans); font-size: 1rem; outline: none;">
             <button id="w-btn-search" class="btn primary">Traccia</button>
           </div>
           
           <div id="full-char-list" class="char-list" style="display: none; max-height: 250px; overflow-y: auto; padding: 12px; border: 2px solid var(--border-soft); border-radius: 16px; background: var(--card-bg); margin-bottom: 15px;"></div>
-          
         </div>
+        
       </div>
     </section>
 
