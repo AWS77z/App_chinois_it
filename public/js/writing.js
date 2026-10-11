@@ -196,18 +196,24 @@ let currentIndex = 0;
       if (currentMode === "train") {
         // MODE ENTRAÎNEMENT : On boucle sur la même séquence !
         if (currentWordChars.length > 1) {
+            // Si c'est un mot de plusieurs caractères, on recharge tout le mot
             customQueue = [...currentWordChars];
             currentWordIndex = 0;
             updateWordDisplay();
             loadCustomCharacter(customQueue.shift(), true);
         } else {
-            loadCustomCharacter(CHARS_1500[currentIndex], true);
+            // Si c'est un caractère unique (recherché ou de la grille), on le relance directement
+            loadCustomCharacter(current.hanzi, true);
         }
       } else {
-        // MODE DÉFILEMENT : On passe au suivant.
+        // MODE DÉFILEMENT : On passe au caractère SUIVANT de la liste principale.
         currentWordChars = [];
         updateWordDisplay();
-        currentIndex++;
+        
+        // Si le caractère actuel était dans la liste, on passe au suivant. Sinon, on reprend au début de la liste.
+        let idx = CHARS_1500.indexOf(current.hanzi);
+        currentIndex = (idx !== -1) ? idx + 1 : currentIndex + 1;
+        
         if (currentIndex >= CHARS_1500.length) currentIndex = 0;
         loadCustomCharacter(CHARS_1500[currentIndex], true);
       }
