@@ -355,33 +355,10 @@ let currentIndex = 0;
   // --- NOUVEAU : SYSTÈME DE SUGGESTIONS (AUTOCOMPLETE) ---
   let suggestTimer = null;
 
-  async function fetchPinyinSuggestions(text) {
-    try {
-      const url = `https://inputtools.google.com/request?text=${encodeURIComponent(text)}&itc=zh-t-i0-pinyin&num=5&cp=0&cs=1&ie=utf-8&oe=utf-8&app=demopage`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data[0] === "SUCCESS" && data[1] && data[1][0]) return data[1][0][1]; 
-    } catch (e) {}
-    return [];
-  }
-
-  async function fetchLiveTranslation(text) {
-    try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=it&tl=zh-CN&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
-      const response = await fetch(url);
-      const data = await response.json();
-      const zh = data[0][0][0];
-      let py = "";
-      if (data[0] && data[0][1]) py = data[0][1][3] || data[0][1][2] || "";
-      return { zh: zh, py: py.toLowerCase() };
-    } catch (e) { return null; }
-  }
-
   function setupAutocomplete() {
     const searchInput = document.getElementById("w-search");
     const suggestionsBox = document.getElementById("w-suggestions");
 
-    // Sécurité si les éléments n'existent pas
     if (!searchInput || !suggestionsBox) return;
 
     searchInput.addEventListener("input", (e) => {
@@ -394,13 +371,11 @@ let currentIndex = 0;
       }
 
       suggestTimer = setTimeout(async () => {
-        // 1. On lance les recherches
         const [rawSuggestions, translation] = await Promise.all([
           fetchPinyinSuggestions(val),
           fetchLiveTranslation(val)
         ]);
         
-        // 2. On récupère la traduction et le pinyin pour CHAQUE suggestion trouvée
         const suggestionsDetails = await Promise.all(
           rawSuggestions.map(async (hanzi) => {
             const details = await fetchTranslation(hanzi);
@@ -411,15 +386,14 @@ let currentIndex = 0;
         suggestionsBox.innerHTML = "";
         let hasResults = false;
         
-        // 3. Affichage des propositions Pinyin enrichies
         if (suggestionsDetails.length > 0) {
           hasResults = true;
           suggestionsDetails.forEach(sugg => {
             const item = document.createElement("div");
             
-            // Mise en page de la ligne : HANZI (pinyin) - Traduction
+            // Ajout de pointer-events: none sur les spans intérieurs pour éviter les bugs tactiles
             item.innerHTML = `
-              <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 10px; pointer-events: none;">
                 <span style="font-family: var(--serif); font-size: 1.6rem; color: var(--text-main); font-weight: bold;">${sugg.hanzi}</span>
                 <span style="font-family: var(--sans); font-size: 1rem; color: var(--primary-dark); font-weight: 700;">${sugg.pinyin}</span>
                 <span style="font-family: var(--sans); font-size: 0.95rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto;">${sugg.it}</span>
@@ -427,33 +401,32 @@ let currentIndex = 0;
             `;
             
             item.style.cssText = "padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--border-soft); transition: background 0.2s;";
-            item.onmouseover = () => item.style.background = "var(--bg-color)";
-            item.onmouseout = () => item.style.background = "transparent";
             
-            item.addEventListener("click", () => {
+            // Événement pour mobile et PC
+            item.addEventListener("pointerdown", (e) => {
+              e.preventDefault(); // Empêche le clavier mobile de clignoter
               searchInput.value = sugg.hanzi;
               suggestionsBox.style.display = "none";
               handleSearch();
             });
+            
             suggestionsBox.appendChild(item);
           });
         }
         
-        // 4. Affichage de la traduction si l'utilisateur tapait de l'Italien
         if (translation && translation.zh && translation.zh.toLowerCase() !== val.toLowerCase()) {
           hasResults = true;
           const itItem = document.createElement("div");
           itItem.innerHTML = `
-            <div style="font-size: 0.85rem; color: var(--text-muted); font-family: var(--sans);">Traduzione di <strong style="color:var(--text-main)">${val}</strong> :</div>
-            <div style="font-family: var(--serif); font-size: 1.6rem; color: var(--primary); margin-top: 4px; display: flex; align-items: center; gap: 8px;">
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-family: var(--sans); pointer-events: none;">Traduzione di <strong style="color:var(--text-main)">${val}</strong> :</div>
+            <div style="font-family: var(--serif); font-size: 1.6rem; color: var(--primary); margin-top: 4px; display: flex; align-items: center; gap: 8px; pointer-events: none;">
               ${translation.zh} <span style="font-family: var(--sans); font-size: 1rem; color: var(--text-muted);">(${translation.py})</span>
             </div>
           `;
           itItem.style.cssText = "padding: 12px 16px; cursor: pointer;";
-          itItem.onmouseover = () => itItem.style.background = "var(--bg-color)";
-          itItem.onmouseout = () => itItem.style.background = "transparent";
           
-          itItem.addEventListener("click", () => {
+          itItem.addEventListener("pointerdown", (e) => {
+            e.preventDefault();
             searchInput.value = translation.zh; 
             suggestionsBox.style.display = "none";
             handleSearch();
@@ -462,12 +435,12 @@ let currentIndex = 0;
         }
         
         suggestionsBox.style.display = hasResults ? "block" : "none";
-      }, 300); // 300ms de délai pour ne pas faire planter l'API pendant la frappe
+      }, 300); 
     });
 
-    // Cacher quand on clique ailleurs
+    // Correction de la détection du clic extérieur pour mobile
     document.addEventListener("click", (e) => {
-      if (e.target !== searchInput && e.target !== suggestionsBox) {
+      if (e.target !== searchInput && !suggestionsBox.contains(e.target)) {
         suggestionsBox.style.display = "none";
       }
     });
