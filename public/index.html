@@ -51,9 +51,16 @@
           </div>
           
           <h2 class="small-title">Navigazione</h2>
-          <div class="search-wrap" style="display: flex; gap: 8px; margin-bottom: 15px;">
+          <div class="search-wrap" style="display: flex; gap: 8px; margin-bottom: 15px; align-items: flex-start;">
             <button id="w-btn-list" class="btn" style="flex: 1; padding: 12px 10px;">☰ Griglia</button>
-            <input type="text" id="w-search" placeholder="Parola in italiano o Hanzi..." style="flex: 2; padding: 12px; border-radius: 16px; border: 2px solid var(--border-soft); font-family: var(--sans); font-size: 1rem; outline: none;">
+            
+            <div style="flex: 2; position: relative;">
+              <input type="text" id="w-search" placeholder="Pinyin o Italiano..." style="width: 100%; padding: 12px; border-radius: 16px; border: 2px solid var(--border-soft); font-family: var(--sans); font-size: 1rem; outline: none; box-sizing: border-box;">
+              
+              <!-- Menu déroulant des suggestions -->
+              <div id="w-suggestions" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: var(--card-bg); border: 2px solid var(--border-soft); border-radius: 12px; padding: 6px 0; margin-top: 6px; z-index: 100; box-shadow: 0 8px 24px rgba(255, 75, 140, 0.15); max-height: 250px; overflow-y: auto;"></div>
+            </div>
+            
             <button id="w-btn-search" class="btn primary">Traccia</button>
           </div>
           

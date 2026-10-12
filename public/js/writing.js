@@ -352,6 +352,127 @@ let currentIndex = 0;
     document.getElementById("w-search").value = ""; 
   }
 
+  // --- NOUVEAU : SYSTÈME DE SUGGESTIONS (AUTOCOMPLETE) ---
+  let suggestTimer = null;
+
+  async function fetchPinyinSuggestions(text) {
+    try {
+      const url = `https://inputtools.google.com/request?text=${encodeURIComponent(text)}&itc=zh-t-i0-pinyin&num=5&cp=0&cs=1&ie=utf-8&oe=utf-8&app=demopage`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data[0] === "SUCCESS" && data[1] && data[1][0]) return data[1][0][1]; 
+    } catch (e) {}
+    return [];
+  }
+
+  async function fetchLiveTranslation(text) {
+    try {
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=it&tl=zh-CN&dt=t&dt=rm&q=${encodeURIComponent(text)}`;
+      const response = await fetch(url);
+      const data = await response.json();
+      const zh = data[0][0][0];
+      let py = "";
+      if (data[0] && data[0][1]) py = data[0][1][3] || data[0][1][2] || "";
+      return { zh: zh, py: py.toLowerCase() };
+    } catch (e) { return null; }
+  }
+
+  function setupAutocomplete() {
+    const searchInput = document.getElementById("w-search");
+    const suggestionsBox = document.getElementById("w-suggestions");
+
+    // Sécurité si les éléments n'existent pas
+    if (!searchInput || !suggestionsBox) return;
+
+    searchInput.addEventListener("input", (e) => {
+      const val = e.target.value.trim();
+      clearTimeout(suggestTimer);
+      
+      if (val.length === 0 || /[\u4e00-\u9fa5]/.test(val)) {
+        suggestionsBox.style.display = "none";
+        return;
+      }
+
+      suggestTimer = setTimeout(async () => {
+        // 1. On lance les recherches
+        const [rawSuggestions, translation] = await Promise.all([
+          fetchPinyinSuggestions(val),
+          fetchLiveTranslation(val)
+        ]);
+        
+        // 2. On récupère la traduction et le pinyin pour CHAQUE suggestion trouvée
+        const suggestionsDetails = await Promise.all(
+          rawSuggestions.map(async (hanzi) => {
+            const details = await fetchTranslation(hanzi);
+            return { hanzi: hanzi, pinyin: details.pinyin, it: details.it };
+          })
+        );
+        
+        suggestionsBox.innerHTML = "";
+        let hasResults = false;
+        
+        // 3. Affichage des propositions Pinyin enrichies
+        if (suggestionsDetails.length > 0) {
+          hasResults = true;
+          suggestionsDetails.forEach(sugg => {
+            const item = document.createElement("div");
+            
+            // Mise en page de la ligne : HANZI (pinyin) - Traduction
+            item.innerHTML = `
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-family: var(--serif); font-size: 1.6rem; color: var(--text-main); font-weight: bold;">${sugg.hanzi}</span>
+                <span style="font-family: var(--sans); font-size: 1rem; color: var(--primary-dark); font-weight: 700;">${sugg.pinyin}</span>
+                <span style="font-family: var(--sans); font-size: 0.95rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto;">${sugg.it}</span>
+              </div>
+            `;
+            
+            item.style.cssText = "padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--border-soft); transition: background 0.2s;";
+            item.onmouseover = () => item.style.background = "var(--bg-color)";
+            item.onmouseout = () => item.style.background = "transparent";
+            
+            item.addEventListener("click", () => {
+              searchInput.value = sugg.hanzi;
+              suggestionsBox.style.display = "none";
+              handleSearch();
+            });
+            suggestionsBox.appendChild(item);
+          });
+        }
+        
+        // 4. Affichage de la traduction si l'utilisateur tapait de l'Italien
+        if (translation && translation.zh && translation.zh.toLowerCase() !== val.toLowerCase()) {
+          hasResults = true;
+          const itItem = document.createElement("div");
+          itItem.innerHTML = `
+            <div style="font-size: 0.85rem; color: var(--text-muted); font-family: var(--sans);">Traduzione di <strong style="color:var(--text-main)">${val}</strong> :</div>
+            <div style="font-family: var(--serif); font-size: 1.6rem; color: var(--primary); margin-top: 4px; display: flex; align-items: center; gap: 8px;">
+              ${translation.zh} <span style="font-family: var(--sans); font-size: 1rem; color: var(--text-muted);">(${translation.py})</span>
+            </div>
+          `;
+          itItem.style.cssText = "padding: 12px 16px; cursor: pointer;";
+          itItem.onmouseover = () => itItem.style.background = "var(--bg-color)";
+          itItem.onmouseout = () => itItem.style.background = "transparent";
+          
+          itItem.addEventListener("click", () => {
+            searchInput.value = translation.zh; 
+            suggestionsBox.style.display = "none";
+            handleSearch();
+          });
+          suggestionsBox.appendChild(itItem);
+        }
+        
+        suggestionsBox.style.display = hasResults ? "block" : "none";
+      }, 300); // 300ms de délai pour ne pas faire planter l'API pendant la frappe
+    });
+
+    // Cacher quand on clique ailleurs
+    document.addEventListener("click", (e) => {
+      if (e.target !== searchInput && e.target !== suggestionsBox) {
+        suggestionsBox.style.display = "none";
+      }
+    });
+  }
+
   // 7. INITIALISATION ET CHANGEMENT DE MODE
   function setMode(mode) {
     currentMode = mode;
@@ -364,10 +485,14 @@ let currentIndex = 0;
     }
   }
 
-  function init() {
+
+function init() {
     if ('speechSynthesis' in window) window.speechSynthesis.getVoices();
 
     updateWordDisplay();
+
+    // LIGNE AJOUTÉE ICI : Allume la détection de frappe et les suggestions
+    setupAutocomplete();
 
     document.getElementById("w-quiz").addEventListener("click", quiz);
     document.getElementById("w-animate").addEventListener("click", animate);
