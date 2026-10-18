@@ -103,78 +103,58 @@
 
 <!-- FLASHCARDS -->
     <section id="flashcards" class="panel" role="tabpanel" hidden>
-      <div class="fc" style="position: relative; width: 100%;">
-        
-        <!-- Le contenu principal des flashcards (caché tant qu'on n'est pas connecté) -->
-        <div id="fc-main" hidden>
-          <div class="fc-toolbar">
-            <button id="fc-open-form" class="btn primary">Crea una flashcard</button>
-            <button id="fc-open-list" class="btn" type="button">Le mie carte</button>
-            <span id="fc-stats" class="msg"></span>
+      <div class="fc">
+        <div class="fc-toolbar">
+          <button id="fc-open-form" class="btn primary">Crea una flashcard</button>
+          <button id="fc-open-list" class="btn" type="button">Le mie carte</button>
+          <span id="fc-stats" class="msg"></span>
+        </div>
+ 
+        <p id="fc-empty" class="msg" hidden>Ancora nessuna carta: crea la tua prima flashcard.</p>
+ 
+        <article id="fc-card" class="fc-card" hidden>
+          <p id="fc-type" class="fc-type"></p>
+ 
+          <!-- Recto -->
+          <div id="fc-front">
+            <div class="fc-question">
+              <div id="fc-q-main" class="q-main"></div>
+              <div id="fc-q-sub" class="q-sub"></div>
+            </div>
+            <input id="fc-input" class="fc-input" type="text" autocomplete="off" placeholder="Scrivi il significato in italiano" hidden>
+            <div id="fc-draw" hidden>
+              <div class="grid-box"><canvas id="fc-canvas" aria-label="Area di disegno"></canvas></div>
+              <button id="fc-clear" class="btn" type="button">Cancella</button>
+            </div>
+            <div class="btn-row center">
+              <button id="fc-check" class="btn primary" type="button"></button>
+            </div>
           </div>
  
-          <p id="fc-empty" class="msg" hidden>Ancora nessuna carta: crea la tua prima flashcard.</p>
- 
-          <article id="fc-card" class="fc-card" hidden>
-            <p id="fc-type" class="fc-type"></p>
- 
-            <!-- Recto -->
-            <div id="fc-front">
-              <div class="fc-question">
-                <div id="fc-q-main" class="q-main"></div>
-                <div id="fc-q-sub" class="q-sub"></div>
+          <!-- Verso -->
+          <div id="fc-back" hidden>
+            <div id="fc-compare" class="compare">
+              <div id="fc-mine" class="compare-col">
+                <h3>La tua risposta</h3>
+                <p id="fc-mine-text" class="mine-text"></p>
+                <div id="fc-mine-img-wrap" class="grid-box"><img id="fc-mine-img" alt="Il tuo tracciato"></div>
               </div>
-              <input id="fc-input" class="fc-input" type="text" autocomplete="off" placeholder="Scrivi il significato in italiano" hidden>
-              <div id="fc-draw" hidden>
-                <div class="grid-box"><canvas id="fc-canvas" aria-label="Area di disegno"></canvas></div>
-                <button id="fc-clear" class="btn" type="button">Cancella</button>
-              </div>
-              <div class="btn-row center">
-                <button id="fc-check" class="btn primary" type="button"></button>
+              <div class="compare-col">
+                <h3>Soluzione</h3>
+                <div id="fc-sol-zh" class="sol-zh" lang="zh"></div>
+                <p id="fc-sol-py" class="pinyin big"></p>
+                <p id="fc-sol-fr" class="meaning"></p>
+                <button id="fc-listen" class="btn" type="button">Ascolta</button>
               </div>
             </div>
- 
-            <!-- Verso -->
-            <div id="fc-back" hidden>
-              <div id="fc-compare" class="compare">
-                <div id="fc-mine" class="compare-col">
-                  <h3>La tua risposta</h3>
-                  <p id="fc-mine-text" class="mine-text"></p>
-                  <div id="fc-mine-img-wrap" class="grid-box"><img id="fc-mine-img" alt="Il tuo tracciato"></div>
-                </div>
-                <div class="compare-col">
-                  <h3>Soluzione</h3>
-                  <div id="fc-sol-zh" class="sol-zh" lang="zh"></div>
-                  <p id="fc-sol-py" class="pinyin big"></p>
-                  <p id="fc-sol-fr" class="meaning"></p>
-                  <button id="fc-listen" class="btn" type="button">Ascolta</button>
-                </div>
-              </div>
-              <p id="fc-help" class="msg"></p>
-              <div class="btn-row center">
-                <button id="fc-no" class="btn" type="button">Ho sbagliato</button>
-                <button id="fc-yes" class="btn primary" type="button">Ho indovinato</button>
-              </div>
+            <p id="fc-help" class="msg"></p>
+            <div class="btn-row center">
+              <button id="fc-no" class="btn" type="button">Ho sbagliato</button>
+              <button id="fc-yes" class="btn primary" type="button">Ho indovinato</button>
             </div>
-          </article>
-        </div>
-
-        <!-- Le formulaire de connexion (géré par le script) -->
-        <section id="fc-auth" class="auth-card" hidden>
-          <h2>Accesso</h2>
-          <p class="hint">Accedi per ritrovare le tue flashcard. Se il nome utente non esiste ancora, l'account viene creato automaticamente.</p>
-          <form id="fc-auth-form">
-            <label class="field">Nome utente
-              <input id="fc-auth-user" type="text" autocomplete="username" maxlength="40" required>
-            </label>
-            <label class="field">Password
-              <input id="fc-auth-pass" type="password" autocomplete="current-password" required>
-            </label>
-            <p id="fc-auth-msg" class="msg" aria-live="polite"></p>
-            <button id="fc-auth-submit" class="btn primary" type="submit">Accedi</button>
-          </form>
-        </section>
-
+          </div>
+        </article>
+ 
         <dialog id="fc-list-dialog" class="dialog dialog-wide">
           <h2 id="fc-list-title">Le mie flashcard</h2>
           <ul id="fc-list" class="card-list"></ul>
@@ -202,7 +182,6 @@
             </div>
           </form>
         </dialog>
-
       </div>
     </section>
   </main>

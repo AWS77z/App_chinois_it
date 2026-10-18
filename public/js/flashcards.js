@@ -82,8 +82,7 @@ const Flashcards = (() => {
 
   /* ---------- Connexion ---------- */
   function buildAuth() {
-    const panel = $("flashcards"); // On cible directement le panneau des flashcards
-    const root = $("fc-card").parentElement; 
+    const root = $("fc-card").parentElement; // le bloc .fc
 
     // Tout le contenu existant est rangé dans #fc-main, caché tant qu'on n'est pas connecté
     const main = document.createElement("div");
@@ -92,7 +91,7 @@ const Flashcards = (() => {
     [root.querySelector(".fc-toolbar"), $("fc-empty"), $("fc-card")].forEach(el => main.appendChild(el));
     root.insertBefore(main, root.firstChild);
 
-    // Ajout d'un bouton pour gérer les sets dans la barre d'outils
+    // Ajout d'un bouton pour gestire les sets dans la barre d'outils
     const toolbar = main.querySelector(".fc-toolbar");
     const setsBtn = document.createElement("button");
     setsBtn.id = "fc-open-sets";
@@ -119,9 +118,7 @@ const Flashcards = (() => {
         <p id="fc-auth-msg" class="msg" aria-live="polite"></p>
         <button id="fc-auth-submit" class="btn primary" type="submit">Accedi</button>
       </form>`;
-    
-    // On insère l'authentification spécifiquement dans le panneau flashcards et non globalement
-    panel.insertBefore(auth, panel.firstChild);
+    root.insertBefore(auth, main);
 
     // Nom de l'utilisateur et bouton de déconnexion dans la barre d'outils
     const chip = document.createElement("span");
