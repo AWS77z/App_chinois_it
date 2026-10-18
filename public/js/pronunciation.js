@@ -1,7 +1,7 @@
 // Pronuncia: traduzione dinamica (italiano → cinese), sintesi vocale e verifica.
 const Pronunciation = (() => {
   let currentPhraseZh = "";
-  let currentPhraseFr = "";
+  let currentPhraseIt = "";
   let currentPinyin = "";
   let recognizer = null;
   
@@ -46,12 +46,12 @@ const Pronunciation = (() => {
        currentPhraseZh = input;
        const result = await fetchTranslation(input, 'zh-CN', 'it');
        if (result) {
-           currentPhraseFr = result.text;
+           currentPhraseIt = result.text;
            const pinyinResult = await fetchTranslation(input, 'zh-CN', 'zh-CN');
            currentPinyin = pinyinResult ? pinyinResult.pinyin : "";
        }
     } else {
-       currentPhraseFr = input;
+       currentPhraseIt = input;
        const result = await fetchTranslation(input, 'it', 'zh-CN');
        if (result) {
            currentPhraseZh = result.text;
@@ -61,12 +61,13 @@ const Pronunciation = (() => {
 
     $("p-hanzi").textContent = currentPhraseZh;
     $("p-pinyin").textContent = currentPinyin;
-    $("p-meaning").textContent = currentPhraseFr;
+    $("p-meaning").textContent = currentPhraseIt;
 
-    setTimeout(listen, 1000);
+    setTimeout(listenNormal, 1000);
   }
 
-  function listen() {
+  // 1. Lettura normale (fluida)
+  function listenNormal() {
     if (!("speechSynthesis" in window) || !currentPhraseZh) return;
     speechSynthesis.resume();
     speechSynthesis.cancel();
@@ -80,6 +81,32 @@ const Pronunciation = (() => {
     if (zhVoice) u.voice = zhVoice;
     
     speechSynthesis.speak(u);
+  }
+
+  // 2. Lettura carattere per carattere con pausa
+  async function listenCharacterByCharacter() {
+    if (!("speechSynthesis" in window) || !currentPhraseZh) return;
+    speechSynthesis.resume();
+    speechSynthesis.cancel();
+    
+    const chars = Array.from(currentPhraseZh);
+    const voices = speechSynthesis.getVoices();
+    const zhVoice = voices.find(v => v.lang.includes("zh") || v.lang.includes("ZH") || v.lang.includes("cmn"));
+    
+    for (let i = 0; i < chars.length; i++) {
+      await new Promise((resolve) => {
+        const u = new SpeechSynthesisUtterance(chars[i]);
+        u.lang = "zh-CN";
+        u.rate = 0.7;
+        if (zhVoice) u.voice = zhVoice;
+        
+        u.onend = () => {
+          setTimeout(resolve, 400); // Pausa di 400ms tra i caratteri
+        };
+        
+        speechSynthesis.speak(u);
+      });
+    }
   }
 
   function record() {
@@ -120,9 +147,9 @@ const Pronunciation = (() => {
         out.style.color = "#1f8a70"; 
         
         out.innerHTML = `
-          <div style="animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+          <div style="animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); text-align: center; margin-top: 15px; width: 100%;">
             <img src="happy-kitty.gif" alt="Bravo!" style="height: 120px; display: block; margin: 0 auto 10px auto;">
-            ✅ <strong>Perfetto!</strong> Hai un'ottima pronuncia.
+            <div>✅ <strong>Perfetto!</strong> Hai un'ottima pronuncia.</div>
           </div>
         `;
         btn.innerHTML = "✨ Ottimo!";
@@ -137,14 +164,14 @@ const Pronunciation = (() => {
         const hPy = resultPy ? resultPy.pinyin : "";
         
         out.innerHTML = `
-          <div style="animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+          <div style="animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); text-align: center; margin-top: 15px; width: 100%;">
             <img src="sad-kitty.gif" alt="Ops!" style="height: 110px; display: block; margin: 0 auto 10px auto;">
-            ❌ <strong>Quasi!</strong> Ho sentito:<br>
-            <div style="background: var(--card-bg); border: 2px solid var(--border-soft); border-radius: 12px; padding: 12px; margin: 12px auto; max-width: 400px; box-shadow: 0 4px 0 var(--border-soft);">
+            <div>❌ <strong>Quasi!</strong> Ho sentito:</div>
+            <div style="background: var(--card-bg); border: 2px solid var(--border-soft); border-radius: 12px; padding: 12px; margin: 12px auto; max-width: 400px; box-shadow: 0 4px 0 var(--border-soft); text-align: center;">
               <span style="font-size:1.6rem; color:var(--text-main); font-family:var(--serif); font-weight:bold;">${heard}</span><br>
               <span style="color:var(--primary-dark); font-weight:bold;">${hPy}</span> <span style="opacity:0.5; margin: 0 4px;">•</span> <span style="color:var(--text-muted);">${hFr}</span>
             </div>
-            Ascolta bene il modello e riprova!
+            <div style="font-size: 0.9rem; color: var(--text-muted); margin-top: 8px;">Ascolta bene il modello e riprova!</div>
           </div>
         `;
       }
@@ -175,7 +202,12 @@ const Pronunciation = (() => {
         if (e.key === "Enter") handleTranslate();
     });
     
-    $("p-listen").addEventListener("click", listen);
+    const btnNormal = $("p-listen-normal");
+    const btnStep = $("p-listen-step");
+    
+    if (btnNormal) btnNormal.addEventListener("click", listenNormal);
+    if (btnStep) btnStep.addEventListener("click", listenCharacterByCharacter);
+    
     $("p-record").addEventListener("click", record);
 
     if ("speechSynthesis" in window) speechSynthesis.getVoices();

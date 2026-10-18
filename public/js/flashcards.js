@@ -1,18 +1,21 @@
-// Flashcard: accesso, creazione assistita (traduzione italiano → cinese + pinyin automatici) e test casuali.
+// Flashcard: accesso, creazione assistita (traduzione italiano → cinese + pinyin automatici), test casuali e gestione dei set.
 // Le carte sono salvate sul server (SQLite), per utente. Il campo « fr » contiene ora il significato in italiano.
 // Nessuna correzione automatica: è l'utente che confronta e giudica.
 const Flashcards = (() => {
   const SESSION_KEY = "hanzi-session";
   const LEGACY_KEY = "hanzi-flashcards-db"; // anciennes cartes stockées dans le navigateur
+  const SETS_KEY = "hanzi-flashcards-sets";   // clé locale pour les sets de cartes
   const TYPES = ["recognize", "speak", "draw"];
   const $ = id => document.getElementById(id);
 
   let deck = [];
+  let sets = [];            // [{ id, name, cardIds: [] }]
   let session = null;       // { userId, username, token }
   let loaded = false;       // vrai seulement quand les cartes du serveur sont chargées
   let syncNote = "";
   let current = null, type = "";
   let ctx = null, drawing = false, last = null;
+  let activeSetId = null;   // null = toutes les cartes
 
   /* ---------- Appels au serveur ---------- */
   async function api(path, opts = {}) {
@@ -31,6 +34,22 @@ const Flashcards = (() => {
       throw e;
     }
     return data;
+  }
+
+  /* ---------- Gestion locale des Sets ---------- */
+  function loadSets() {
+    try {
+      const saved = localStorage.getItem(SETS_KEY + (session ? "_" + session.userId : ""));
+      sets = saved ? JSON.parse(saved) : [];
+    } catch {
+      sets = [];
+    }
+  }
+
+  function saveSets() {
+    try {
+      localStorage.setItem(SETS_KEY + (session ? "_" + session.userId : ""), JSON.stringify(sets));
+    } catch {}
   }
 
   /* ---------- Sauvegarde (envoyée au serveur, en file d'attente) ---------- */
@@ -63,7 +82,8 @@ const Flashcards = (() => {
 
   /* ---------- Connexion ---------- */
   function buildAuth() {
-    const root = $("fc-card").parentElement; // le bloc .fc
+    const panel = $("flashcards"); // On cible directement le panneau des flashcards
+    const root = $("fc-card").parentElement; 
 
     // Tout le contenu existant est rangé dans #fc-main, caché tant qu'on n'est pas connecté
     const main = document.createElement("div");
@@ -71,6 +91,16 @@ const Flashcards = (() => {
     main.hidden = true;
     [root.querySelector(".fc-toolbar"), $("fc-empty"), $("fc-card")].forEach(el => main.appendChild(el));
     root.insertBefore(main, root.firstChild);
+
+    // Ajout d'un bouton pour gérer les sets dans la barre d'outils
+    const toolbar = main.querySelector(".fc-toolbar");
+    const setsBtn = document.createElement("button");
+    setsBtn.id = "fc-open-sets";
+    setsBtn.type = "button";
+    setsBtn.className = "btn";
+    setsBtn.textContent = "📁 Set";
+    setsBtn.addEventListener("click", openSetsModal);
+    toolbar.insertBefore(setsBtn, toolbar.firstChild);
 
     const auth = document.createElement("section");
     auth.id = "fc-auth";
@@ -89,7 +119,9 @@ const Flashcards = (() => {
         <p id="fc-auth-msg" class="msg" aria-live="polite"></p>
         <button id="fc-auth-submit" class="btn primary" type="submit">Accedi</button>
       </form>`;
-    root.insertBefore(auth, main);
+    
+    // On insère l'authentification spécifiquement dans le panneau flashcards et non globalement
+    panel.insertBefore(auth, panel.firstChild);
 
     // Nom de l'utilisateur et bouton de déconnexion dans la barre d'outils
     const chip = document.createElement("span");
@@ -100,7 +132,7 @@ const Flashcards = (() => {
     out.type = "button";
     out.className = "btn";
     out.textContent = "Esci";
-    main.querySelector(".fc-toolbar").append(chip, out);
+    toolbar.append(chip, out);
 
     $("fc-auth-form").addEventListener("submit", submitLogin);
     out.addEventListener("click", () => logout());
@@ -144,13 +176,14 @@ const Flashcards = (() => {
     loaded = false;
     try {
       const rows = await api(`/api/flashcards/${session.userId}`);
-      deck = rows.map(r => ({ hanzi: r.hanzi, pinyin: r.pinyin, fr: r.fr, score: r.score || 1 }));
+      deck = rows.map((r, idx) => ({ id: r.id || idx + "_" + r.hanzi, hanzi: r.hanzi, pinyin: r.pinyin, fr: r.fr, score: r.score || 1 }));
     } catch (err) {
       logout(err.status === 401 ? "Sessione scaduta: accedi di nuovo." : "Impossibile caricare le tue carte: " + err.message, false);
       return;
     }
     loaded = true;
     syncNote = "";
+    loadSets();
     showApp();
     importLegacyCards();
     current = null;
@@ -166,7 +199,7 @@ const Flashcards = (() => {
     old = old.filter(c => c && c.hanzi && c.pinyin && c.fr);
     if (!old.length) return;
     if (confirm(`Importare le ${old.length} carte salvate su questo computer nel tuo account?`)) {
-      deck = old.map(c => ({ hanzi: c.hanzi, pinyin: c.pinyin, fr: c.fr, score: c.score || 1 }));
+      deck = old.map((c, idx) => ({ id: idx + "_" + c.hanzi, hanzi: c.hanzi, pinyin: c.pinyin, fr: c.fr, score: c.score || 1 }));
       try { localStorage.removeItem(LEGACY_KEY); } catch {}
       save();
     }
@@ -180,7 +213,7 @@ const Flashcards = (() => {
     session = null; loaded = false; dirty = false;
     clearTimeout(saveTimer);
     try { localStorage.removeItem(SESSION_KEY); } catch {}
-    deck = []; current = null;
+    deck = []; sets = []; current = null; activeSetId = null;
     if ($("fc-dialog").open) $("fc-dialog").close();
     if ($("fc-list-dialog").open) $("fc-list-dialog").close();
     showAuth(message);
@@ -213,6 +246,8 @@ const Flashcards = (() => {
 
   function openForm() {
     ["fc-add-fr", "fc-add-zh", "fc-add-py"].forEach(id => { $(id).value = ""; });
+    const setNotice = $("fc-form-set-notice");
+    if (setNotice) setNotice.remove();
     $("fc-form-msg").textContent = "Scrivi la parola in italiano: il cinese e il pinyin si compilano da soli.";
     $("fc-dialog").showModal();
     $("fc-add-fr").focus();
@@ -248,10 +283,166 @@ const Flashcards = (() => {
     const hanzi = $("fc-add-zh").value.trim();
     const pinyin = $("fc-add-py").value.trim();
     if (!fr || !hanzi || !pinyin) { $("fc-form-msg").textContent = "Compila tutti e tre i campi."; return; }
-    deck.push({ hanzi, pinyin, fr, score: 1 });
+    
+    const newCard = { id: Date.now() + "_" + Math.random().toString(36).substr(2, 5), hanzi, pinyin, fr, score: 1 };
+    deck.push(newCard);
     save();
     $("fc-dialog").close();
+
+    // Afficher une option pour l'ajouter directement à un set si des sets existent
+    showAddToSetPrompt(newCard);
+
     if (!current) next(); else updateStats();
+  }
+
+  function showAddToSetPrompt(card) {
+    if (!sets.length) return;
+    const dialog = $("fc-dialog");
+    // On crée temporairement une pop-up ou notification rapide d'ajout au set
+    const container = document.createElement("dialog");
+    container.id = "fc-set-quick-dialog";
+    container.className = "auth-card";
+    container.style.cssText = "padding: 20px; border-radius: 12px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.2);";
+    
+    let html = `<h3>Aggiungi a un set</h3><p class="hint">Vuoi aggiungere «${card.hanzi}» a uno dei tuoi set?</p><div style="display:flex; flex-direction:column; gap:8px; margin: 15px 0;">`;
+    sets.forEach(s => {
+      const included = s.cardIds && s.cardIds.includes(card.id);
+      html += `<button type="button" class="btn ${included ? 'primary' : ''}" data-set-id="${s.id}">📁 ${s.name} ${included ? '✓' : '+'}</i></button>`;
+    });
+    html += `</div><button type="button" class="btn" id="fc-quick-close">Chiudi</button>`;
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    container.showModal();
+
+    container.querySelectorAll("[data-set-id]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const setId = btn.getAttribute("data-set-id");
+        const setObj = sets.find(s => s.id === setId);
+        if (setObj) {
+          if (!setObj.cardIds) setObj.cardIds = [];
+          if (!setObj.cardIds.includes(card.id)) {
+            setObj.cardIds.push(card.id);
+            saveSets();
+            btn.className = "btn primary";
+            btn.textContent = `📁 ${setObj.name} ✓`;
+          }
+        }
+      });
+    });
+
+    container.querySelector("#fc-quick-close").addEventListener("click", () => {
+      container.close();
+      container.remove();
+    });
+  }
+
+  /* ---------- Gestion des Sets (Modale) ---------- */
+  function ensureSetsModal() {
+    let modal = $("fc-sets-dialog");
+    if (modal) return modal;
+    modal = document.createElement("dialog");
+    modal.id = "fc-sets-dialog";
+    modal.className = "auth-card";
+    modal.style.cssText = "padding: 20px; border-radius: 16px; border: none; max-width: 450px; width: 90%;";
+    modal.innerHTML = `
+      <h2>Gestione Set</h2>
+      <p class="hint">Crea e organizza le tue flashcard in set tematici.</p>
+      <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+        <input type="text" id="fc-new-set-name" placeholder="Nome del nuovo set..." style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-soft);">
+        <button type="button" id="fc-create-set-btn" class="btn primary">Crea</button>
+      </div>
+      <div id="fc-sets-list" style="max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;"></div>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" id="fc-sets-all-btn" class="btn">Mostra tutte le carte</button>
+        <button type="button" id="fc-sets-close" class="btn primary">Chiudi</button>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector("#fc-create-set-btn").addEventListener("click", () => {
+      const nameInput = modal.querySelector("#fc-new-set-name");
+      const name = nameInput.value.trim();
+      if (!name) return;
+      sets.push({ id: "set_" + Date.now(), name, cardIds: [] });
+      saveSets();
+      nameInput.value = "";
+      renderSetsList();
+    });
+
+    modal.querySelector("#fc-sets-close").addEventListener("click", () => modal.close());
+    modal.querySelector("#fc-sets-all-btn").addEventListener("click", () => {
+      activeSetId = null;
+      modal.close();
+      current = null;
+      next();
+    });
+
+    return modal;
+  }
+
+  function renderSetsList() {
+    const listContainer = document.getElementById("fc-sets-list");
+    if (!listContainer) return;
+    listContainer.textContent = "";
+
+    if (!sets.length) {
+      const empty = document.createElement("div");
+      empty.className = "hint";
+      empty.textContent = "Nessun set creato. Creane uno qui sopra!";
+      listContainer.appendChild(empty);
+      return;
+    }
+
+    sets.forEach(s => {
+      const row = document.createElement("div");
+      row.style.cssText = "display: flex; justify-content: space-between; align-items: center; background: var(--card-bg, #f9f9f9); padding: 10px; border-radius: 8px; border: 1px solid var(--border-soft, #ddd);";
+      
+      const info = document.createElement("div");
+      const count = s.cardIds ? s.cardIds.length : 0;
+      const isActive = activeSetId === s.id;
+      info.innerHTML = `<strong>${s.name}</strong> <span style="font-size: 0.85rem; color: #666;">(${count} ${count === 1 ? 'carta' : 'carte'})</span> ${isActive ? '<span style="color:var(--primary); font-weight:bold;">[Attivo]</span>' : ''}`;
+      
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "6px";
+
+      const playBtn = document.createElement("button");
+      playBtn.type = "button";
+      playBtn.className = "btn primary";
+      playBtn.textContent = "Usa";
+      playBtn.style.padding = "4px 10px";
+      playBtn.addEventListener("click", () => {
+        activeSetId = s.id;
+        document.getElementById("fc-sets-dialog").close();
+        current = null;
+        next();
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "btn del";
+      delBtn.textContent = "Elimina";
+      delBtn.style.padding = "4px 10px";
+      delBtn.addEventListener("click", () => {
+        if (confirm(`Eliminare il set «${s.name}»?`)) {
+          sets = sets.filter(x => x.id !== s.id);
+          if (activeSetId === s.id) activeSetId = null;
+          saveSets();
+          renderSetsList();
+          next();
+        }
+      });
+
+      actions.append(playBtn, delBtn);
+      row.append(info, actions);
+      listContainer.appendChild(row);
+    });
+  }
+
+  function openSetsModal() {
+    const modal = ensureSetsModal();
+    renderSetsList();
+    modal.showModal();
   }
 
   /* ---------- Zone de dessin ---------- */
@@ -287,8 +478,6 @@ const Flashcards = (() => {
     const stop = () => { drawing = false; };
     c.addEventListener("pointerup", stop);
     c.addEventListener("pointercancel", stop);
-    // La zone de dessin est invisible tant que l'onglet n'est pas ouvert : on la
-    // (re)dimensionne dès qu'elle devient visible ou qu'elle change de taille.
     if ("ResizeObserver" in window) {
       new ResizeObserver(() => { if (c.clientWidth && !$("fc-draw").hidden) setupCanvas(); }).observe(c);
     }
@@ -309,8 +498,16 @@ const Flashcards = (() => {
   }
 
   /* ---------- Tests ---------- */
+  function getActiveDeck() {
+    if (!activeSetId) return deck;
+    const setObj = sets.find(s => s.id === activeSetId);
+    if (!setObj || !setObj.cardIds) return [];
+    return deck.filter(c => setObj.cardIds.includes(c.id));
+  }
+
   function pickCard() {
-    const pool = deck.length > 1 ? deck.filter(c => c !== current) : deck;
+    const activeDeck = getActiveDeck();
+    const pool = activeDeck.length > 1 ? activeDeck.filter(c => c !== current) : activeDeck;
     const weights = pool.map(c => 5 - c.score);
     let r = Math.random() * weights.reduce((a, b) => a + b, 0);
     for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) return pool[i]; }
@@ -318,7 +515,14 @@ const Flashcards = (() => {
   }
 
   function next() {
-    if (!deck.length) { $("fc-card").hidden = true; $("fc-empty").hidden = false; updateStats(); return; }
+    const activeDeck = getActiveDeck();
+    if (!activeDeck.length) { 
+      $("fc-card").hidden = true; 
+      $("fc-empty").hidden = false; 
+      $("fc-empty").textContent = activeSetId ? "Questo set è vuoto o non contiene carte." : "Nessuna carta.";
+      updateStats(); 
+      return; 
+    }
     current = pickCard();
     type = TYPES[Math.floor(Math.random() * TYPES.length)];
 
@@ -381,31 +585,78 @@ const Flashcards = (() => {
   function renderList() {
     const ul = $("fc-list");
     ul.textContent = "";
-    $("fc-list-title").textContent = `Le mie flashcard (${deck.length})`;
+    const activeSet = sets.find(s => s.id === activeSetId);
+    const activeDeck = getActiveDeck();
+    $("fc-list-title").textContent = activeSet ? `Set: ${activeSet.name} (${activeDeck.length})` : `Le mie flashcard (${deck.length})`;
+    
     const make = (tag, cls, text) => {
       const e = document.createElement(tag);
       if (cls) e.className = cls;
       e.textContent = text;
       return e;
     };
-    if (!deck.length) {
+    
+    const listToDisplay = activeSet ? activeDeck : deck;
+    if (!listToDisplay.length) {
       ul.appendChild(make("li", "empty", "Nessuna carta."));
       return;
     }
-    deck.forEach(c => {
+
+    listToDisplay.forEach(c => {
       const li = document.createElement("li");
       const zh = make("span", "li-zh", c.hanzi);
       zh.lang = "zh";
       const mid = document.createElement("div");
       mid.append(make("span", "li-py", c.pinyin), make("span", "li-fr", c.fr));
+      
       const level = c.score >= 3 ? ["ok", "imparata"] : c.score === 2 ? ["mid", "in corso"] : ["todo", "da ripassare"];
+      
+      // Bouton pour gérer les sets de cette carte individuelle
+      const setMenuBtn = make("button", "btn", "📁 Set");
+      setMenuBtn.type = "button";
+      setMenuBtn.style.padding = "4px 8px";
+      setMenuBtn.addEventListener("click", () => openCardSetsManager(c));
+
       const del = make("button", "btn del", "Elimina");
       del.type = "button";
       del.setAttribute("aria-label", `Elimina la carta ${c.hanzi}`);
       del.addEventListener("click", () => removeCard(c));
-      li.append(zh, mid, make("span", "badge " + level[0], level[1]), del);
+
+      const actions = document.createElement("div");
+      actions.style.display = "flex";
+      actions.style.gap = "4px";
+      actions.append(setMenuBtn, del);
+
+      li.append(zh, mid, make("span", "badge " + level[0], level[1]), actions);
       ul.appendChild(li);
     });
+  }
+
+  function openCardSetsManager(card) {
+    if (!sets.length) {
+      alert("Crea prima almeno un set tramite il pulsante «📁 Set» in alto.");
+      return;
+    }
+    let html = `A quale set vuoi aggiungere/rimuovere «${card.hanzi}»?\n\n`;
+    sets.forEach((s, i) => {
+      const hasCard = s.cardIds && s.cardIds.includes(card.id);
+      html += `${i + 1}. [${hasCard ? 'X' : ' '}] ${s.name}\n`;
+    });
+    html += `\nScrivi il numero del set da attivare/disattivare:`;
+    const choice = prompt(html);
+    if (!choice) return;
+    const idx = parseInt(choice.trim()) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= sets.length) return;
+    
+    const targetSet = sets[idx];
+    if (!targetSet.cardIds) targetSet.cardIds = [];
+    if (targetSet.cardIds.includes(card.id)) {
+      targetSet.cardIds = targetSet.cardIds.filter(id => id !== card.id);
+    } else {
+      targetSet.cardIds.push(card.id);
+    }
+    saveSets();
+    renderList();
   }
 
   function openList() {
@@ -416,15 +667,23 @@ const Flashcards = (() => {
   function removeCard(card) {
     if (!confirm(`Eliminare la carta «${card.hanzi} — ${card.fr}»?`)) return;
     deck = deck.filter(c => c !== card);
+    // Nettoyer des sets
+    sets.forEach(s => {
+      if (s.cardIds) s.cardIds = s.cardIds.filter(id => id !== card.id);
+    });
+    saveSets();
     save();
     renderList();
     if (card === current) { current = null; next(); } else updateStats();
   }
 
   function updateStats() {
-    const known = deck.filter(c => c.score >= 3).length;
-    const n = deck.length;
-    $("fc-stats").textContent = `${n} ${n === 1 ? "carta" : "carte"} · ${known} ${known === 1 ? "imparata" : "imparate"}${syncNote}`;
+    const activeDeck = getActiveDeck();
+    const known = activeDeck.filter(c => c.score >= 3).length;
+    const n = activeDeck.length;
+    const activeSet = sets.find(s => s.id === activeSetId);
+    const setNameStr = activeSet ? ` [Set: ${activeSet.name}]` : "";
+    $("fc-stats").textContent = `${n} ${n === 1 ? "carta" : "carte"} · ${known} ${known === 1 ? "imparata" : "imparate"}${setNameStr}${syncNote}`;
   }
 
   function init() {
