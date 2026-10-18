@@ -634,26 +634,62 @@ const Flashcards = (() => {
       alert("Crea prima almeno un set tramite il pulsante «📁 Set» in alto.");
       return;
     }
-    let html = `A quale set vuoi aggiungere/rimuovere «${card.hanzi}»?\n\n`;
-    sets.forEach((s, i) => {
-      const hasCard = s.cardIds && s.cardIds.includes(card.id);
-      html += `${i + 1}. [${hasCard ? 'X' : ' '}] ${s.name}\n`;
-    });
-    html += `\nScrivi il numero del set da attivare/disattivare:`;
-    const choice = prompt(html);
-    if (!choice) return;
-    const idx = parseInt(choice.trim()) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= sets.length) return;
+
+    // Supprime l'ancienne modale si elle est encore là
+    let existing = document.getElementById("fc-card-set-manager");
+    if (existing) existing.remove();
+
+    // Crée une belle modale cliquable
+    const container = document.createElement("dialog");
+    container.id = "fc-card-set-manager";
+    container.className = "auth-card";
+    container.style.cssText = "padding: 20px; border-radius: 12px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.2); max-width: 400px; width: 90%;";
+
+    let html = `<h3>Gestisci Set</h3><p class="hint">Aggiungi o rimuovi «${card.hanzi}» dai tuoi set.</p><div style="display:flex; flex-direction:column; gap:8px; margin: 15px 0;">`;
     
-    const targetSet = sets[idx];
-    if (!targetSet.cardIds) targetSet.cardIds = [];
-    if (targetSet.cardIds.includes(card.id)) {
-      targetSet.cardIds = targetSet.cardIds.filter(id => id !== card.id);
-    } else {
-      targetSet.cardIds.push(card.id);
-    }
-    saveSets();
-    renderList();
+    // Génère un bouton pour chaque set
+    sets.forEach(s => {
+      const included = s.cardIds && s.cardIds.includes(card.id);
+      html += `<button type="button" class="btn ${included ? 'primary' : ''}" data-toggle-set="${s.id}">📁 ${s.name} ${included ? '✓' : '+'}</button>`;
+    });
+    
+    html += `</div><button type="button" class="btn" id="fc-close-card-manager">Chiudi</button>`;
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    container.showModal();
+
+    // Rend les boutons cliquables pour ajouter/retirer
+    container.querySelectorAll("[data-toggle-set]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const setId = btn.getAttribute("data-toggle-set");
+        const setObj = sets.find(s => s.id === setId);
+        
+        if (setObj) {
+          if (!setObj.cardIds) setObj.cardIds = [];
+          const idx = setObj.cardIds.indexOf(card.id);
+          
+          if (idx > -1) {
+            // Si la carte y est déjà, on la retire
+            setObj.cardIds.splice(idx, 1);
+            btn.className = "btn";
+            btn.textContent = `📁 ${setObj.name} +`;
+          } else {
+            // Sinon, on l'ajoute
+            setObj.cardIds.push(card.id);
+            btn.className = "btn primary";
+            btn.textContent = `📁 ${setObj.name} ✓`;
+          }
+          saveSets();
+          renderList(); // Met à jour la liste derrière
+        }
+      });
+    });
+
+    // Fermeture de la modale
+    container.querySelector("#fc-close-card-manager").addEventListener("click", () => {
+      container.close();
+      container.remove();
+    });
   }
 
   function openList() {
